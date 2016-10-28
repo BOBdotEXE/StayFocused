@@ -1,0 +1,35 @@
+{
+    "author": "BOBdotEXE",
+    "dependencies": {},
+    "keywords": [],
+    "name": "stay-focused",
+    "pebble": {
+        "displayName": "Stay Focused",
+        "enableMultiJS": false,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "images/eyecon.png",
+                    "menuIcon": true,
+                    "name": "eyecon",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite"
+        ],
+        "uuid": "65f89200-e411-4426-8b2d-cf42b8800899",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "0.50.0"
+}
