@@ -2,7 +2,10 @@
 
 static Window *s_main_window;
 static TextLayer *s_time_layer;
+// @TODO static TextLayer *s_batt_layer; //"low battery" display layer
 static TextLayer *text_layer;
+static Layer *s_battery_layer;
+static int s_battery_level;
 static TextLayer *status_layer;
 static TextLayer *countdown_layer;
 bool enabeled =false;
@@ -17,6 +20,42 @@ char str[15];
 char timerText[40]; //string for timmer text
 char countDownText[8]; //string for countdown
 int countdownStyle=1; // 0= OFF, 1 = 4second refresh, 2= 2second refresh, 3 = 1second Refresh  
+
+static void battery_update_proc(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+
+  // Find the width of the bar (total width = 114px)
+  #if PBL_DISPLAY_HEIGHT == 228 
+  int width = (s_battery_level * 170) / 100; //width for pebble 2
+  #elif PBL_DISPLAY_HEIGHT == 180
+ int width = (s_battery_level * 111) / 100;  //width for older pebbels
+#else
+  int width = (s_battery_level * 111) / 100; //failsafe
+#endif
+  
+
+   // Draw the boarder
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  
+  // Draw the background
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, GRect(1, 1, bounds.size.w-2, bounds.size.h-2), 0, GCornerNone);
+
+  // Draw the bar
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, GRect(2, 2, width, bounds.size.h-4), 0, GCornerNone);
+      // Update meter
+ layer_mark_dirty(s_battery_layer);
+}
+
+static void battery_callback(BatteryChargeState state) {
+  // Record the new battery level
+  s_battery_level = state.charge_percent;
+    // Update meter
+ layer_mark_dirty(s_battery_layer);
+
+}
 
 
 static void countDown() //update the countdown timer
@@ -283,7 +322,37 @@ static void main_window_load(Window *window) {
   GRect bounds = layer_get_bounds(window_layer);
 
   // Create the TextLayer with specific bounds
-  s_time_layer = text_layer_create(GRect(0,0, bounds.size.w, 60));
+// s_time_layer = text_layer_create(GRect(0,0, bounds.size.w, 60));
+    //is Pebble 2
+  #if PBL_DISPLAY_HEIGHT == 228 
+s_time_layer = text_layer_create(GRect(0,5, bounds.size.w, 60));
+status_layer =   text_layer_create(GRect(0,125, bounds.size.w, 40)); //reminder pos.
+countdown_layer= text_layer_create(GRect(0,165, bounds.size.w, 50));//coundown pos.
+s_battery_layer = layer_create(GRect(14, 60, 170, 6)); //battery level pos.
+  
+#elif defined(PBL_ROUND)
+  //is pebble round
+s_time_layer = text_layer_create(GRect(0,8, bounds.size.w, 60));
+status_layer =  text_layer_create(GRect(0,100, bounds.size.w, 40)); //reminder pos.
+countdown_layer= text_layer_create(GRect(0,125, bounds.size.w, 50));//coundown pos.
+s_battery_layer = layer_create(GRect(30, 54, 115, 6)); //battery level pos.
+   
+ 
+  //Is Classic pebble/pebble time/steel variants
+#elif PBL_DISPLAY_HEIGHT == 180
+ s_time_layer = text_layer_create(GRect(0,0, bounds.size.w, 60));
+status_layer =  text_layer_create(GRect(0,100, bounds.size.w, 40)); //reminder pos.
+countdown_layer= text_layer_create(GRect(0,125, bounds.size.w, 50));//coundown pos.
+s_battery_layer = layer_create(GRect(14, 54, 115, 6)); //battery level pos.
+  
+#else
+  //failsafe
+s_time_layer = text_layer_create(GRect(0,0, bounds.size.w, 60));
+status_layer =  text_layer_create(GRect(0,100, bounds.size.w, 40)); //reminder pos.
+countdown_layer= text_layer_create(GRect(0,125, bounds.size.w, 50));//coundown pos.
+s_battery_layer = layer_create(GRect(14, 54, 115, 6)); //battery level pos.
+#endif
+
 
   // Improve the layout to be more like a watchface
   text_layer_set_background_color(s_time_layer, GColorClear);
@@ -301,16 +370,25 @@ static void main_window_load(Window *window) {
   layer_add_child(window_layer, text_layer_get_layer(text_layer));
   
   //status layer
-  status_layer = text_layer_create(GRect(0,100, bounds.size.w, 40));
+  
+
+ 
   text_layer_set_text(status_layer, "Reminder DISABLED!");
   text_layer_set_text_alignment(status_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(status_layer));
   
   //Countdown layer
-  countdown_layer= text_layer_create(GRect(0,125, bounds.size.w, 50));
+ 
   swapCountdown(false); // at this point the countdown should be off..
   text_layer_set_text_alignment(countdown_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(countdown_layer));
+  
+  // Create battery meter Layer
+
+layer_set_update_proc(s_battery_layer, battery_update_proc);
+
+// Add to Window
+layer_add_child(window_get_root_layer(window), s_battery_layer);
   
 }
 
@@ -320,6 +398,7 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(text_layer);
   text_layer_destroy(status_layer);
   text_layer_destroy(countdown_layer);
+  layer_destroy(s_battery_layer);
 }
 
 
@@ -345,6 +424,11 @@ static void init() {
   // Register with TickTimerService
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 
+    // Register for battery level updates
+battery_state_service_subscribe(battery_callback);
+  // Ensure battery level is displayed from the start
+battery_callback(battery_state_service_peek());
+
 }
 
 static void deinit() {
@@ -356,4 +440,5 @@ int main(void) {
   init();
   app_event_loop();
   deinit();
+
 }
